@@ -1,38 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../controllers/signup_controller.dart';
+import '../controllers/signin_controller.dart';
 import '../../../core/widgets/back_button_widget.dart';
 
-class SignupPage extends StatefulWidget {
-  const SignupPage({super.key});
+class SigninPage extends StatefulWidget {
+  const SigninPage({super.key});
 
   @override
-  State<SignupPage> createState() => _SignupPageState();
+  State<SigninPage> createState() => _SigninPageState();
 }
 
-class _SignupPageState extends State<SignupPage> {
-  bool _navigated = false; // 🚫 chống navigate nhiều lần
+class _SigninPageState extends State<SigninPage> {
+  bool _navigated = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
 
-    final controller = context.watch<SignupController>();
+    final controller = context.watch<SigninController>();
 
-    // ✅ CHỈ CHUYỂN TRANG 1 LẦN DUY NHẤT
     if (controller.canNavigate && !_navigated) {
       _navigated = true;
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.pushReplacementNamed(context, '/fill-info');
+        Navigator.pushReplacementNamed(context, '/home');
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final controller = context.watch<SignupController>();
+    final controller = context.watch<SigninController>();
 
     return Scaffold(
       body: Stack(
@@ -48,7 +47,7 @@ class _SignupPageState extends State<SignupPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Welcome back\nSign up to your account',
+                    'Welcome back!\nSignin to your account',
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
@@ -82,7 +81,7 @@ class _SignupPageState extends State<SignupPage> {
                       onPressed: controller.loading
                           ? null
                           : () async {
-                              await controller.handleSignup();
+                              await controller.handleSignin();
                             },
                       child: controller.loading
                           ? const SizedBox(
@@ -90,7 +89,7 @@ class _SignupPageState extends State<SignupPage> {
                               height: 20,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Text('Next'),
+                          : const Text('Sign In'),
                     ),
                   ),
 

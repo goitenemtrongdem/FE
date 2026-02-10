@@ -1,41 +1,99 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import '../services/auth_api.dart';
 
 class SignupController extends ChangeNotifier {
+  final AuthApi _authApi = AuthApi();
+
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
 
   bool loading = false;
   bool success = false;
-  String message = '';
 
+  /// Để hiển thị message dưới nút
+  String message = '';
+  bool canNavigate = false;
+  /// Đánh dấu đã signup hay chưa
+  bool signedUp = false;
+
+  /// Lưu idToken để dùng cho các bước sau
+  String? _idToken;
+
+  /// ===============================
+  /// NEXT / VERIFIED BUTTON HANDLER
+  /// ===============================
   Future<void> handleSignup() async {
-    loading = true;
-    message = '';
-    notifyListeners();
+    if (loading) return;
 
     try {
-      final res = await http.post(
-        Uri.parse('http://localhost:3000/auth/signup-request'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': emailController.text.trim(),
-          'password': passwordController.text.trim(),
-        }),
-      );
+      loading = true;
+      message = '';
+      notifyListeners();
 
-      final data = jsonDecode(res.body);
+      // ===============================
+      // LẦN 1: SIGN UP + SEND VERIFY MAIL
+      // ===============================
+      if (!signedUp) {
+        final res = await _authApi.signUp(
+          email: emailController.text.trim(),
+          password: passwordController.text.trim(),
+        );
 
-      success = data['success'] == true;
-      message = data['message'] ?? 'Unknown response';
+        _idToken = res['idToken'];
+
+        await _authApi.sendVerifyEmail(idToken: _idToken!);
+
+        signedUp = true;
+        success = true;
+        message = 'Đã gửi email xác nhận. Vui lòng kiểm tra Gmail.';
+        return;
+      }
+
+      // ===============================
+      // LẦN 2: CHECK EMAIL VERIFIED
+      // ===============================
+      final verified =
+          await _authApi.checkEmailVerified(idToken: _idToken!);
+
+      if (!verified) {
+        success = false;
+        message = 'Email chưa được xác nhận. Vui lòng kiểm tra lại.';
+        return;
+      }
+
+      // ===============================
+      // CALL BACKEND AFTER VERIFY
+      // ===============================
+      await AuthApi.afterVerify(idToken: _idToken!);
+
+      success = true;
+      message = 'Email xác nhận thành công. Đang chuyển trang...';
+       
+      // 👉 Điều hướng sang trang fill info
+      // (UI hoặc Router sẽ xử lý phần này)
     } catch (e) {
-      success = false;
-      message = 'Cannot connect to server';
+      
+      message = _friendlyError(e.toString());
+      canNavigate = true;
+    } catch (e) {
+      message = e.toString();
+    } finally {
+      loading = false;
+      notifyListeners();
     }
+  }
 
-    loading = false;
-    notifyListeners();
+  /// ===============================
+  /// XỬ LÝ ERROR CHO DỄ NHÌN
+  /// ===============================
+  String _friendlyError(String raw) {
+    if (raw.contains('EMAIL_EXISTS')) {
+      return 'Email đã tồn tại. Vui lòng đăng nhập.';
+    }
+    if (raw.contains('INVALID_PASSWORD')) {
+      return 'Mật khẩu không hợp lệ.';
+    }
+    return raw;
   }
 
   @override

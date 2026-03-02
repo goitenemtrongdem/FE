@@ -1,105 +1,134 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import '../services/auth_api.dart';
+import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+
+import '../../../config/api_config.dart';
 
 class SignupController extends ChangeNotifier {
-  final AuthApi _authApi = AuthApi();
-
-  final emailController = TextEditingController();
-  final passwordController = TextEditingController();
 
   bool loading = false;
-  bool success = false;
 
-  /// Để hiển thị message dưới nút
-  String message = '';
-  bool canNavigate = false;
-  /// Đánh dấu đã signup hay chưa
-  bool signedUp = false;
+  String? fcmToken;
+  String? idToken;
 
-  /// Lưu idToken để dùng cho các bước sau
-  String? _idToken;
+  /* =========================
+      STEP 1: SIGNUP
+  ========================= */
+  Future<void> signup({
+    required String email,
+    required String password,
+  }) async {
 
-  /// ===============================
-  /// NEXT / VERIFIED BUTTON HANDLER
-  /// ===============================
-  Future<void> handleSignup() async {
-    if (loading) return;
+    loading = true;
+    notifyListeners();
 
     try {
-      loading = true;
-      message = '';
-      notifyListeners();
 
-      // ===============================
-      // LẦN 1: SIGN UP + SEND VERIFY MAIL
-      // ===============================
-      if (!signedUp) {
-        final res = await _authApi.signUp(
-          email: emailController.text.trim(),
-          password: passwordController.text.trim(),
-        );
+      // 1️⃣ Get FCM
+        // Nếu chưa có → lấy
+  fcmToken ??= await FirebaseMessaging.instance.getToken();
 
-        _idToken = res['idToken'];
+  print("🔥 SIGNUP FCM = $fcmToken");
 
-        await _authApi.sendVerifyEmail(idToken: _idToken!);
+  if (fcmToken == null) {
+    throw Exception("Cannot get FCM Token");
+  }
+      // 2️⃣ Call backend
+      final res = await http.post(
+        Uri.parse("${ApiConfig.baseUrl}/auth/signup-request"),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode({
+          "email": email,
+          "password": password,
+        }),
+      );
 
-        signedUp = true;
-        success = true;
-        message = 'Đã gửi email xác nhận. Vui lòng kiểm tra Gmail.';
-        return;
+      print("📡 SIGNUP STATUS = ${res.statusCode}");
+      print("📦 SIGNUP BODY = ${res.body}");
+
+      final data = jsonDecode(res.body);
+
+      if (res.statusCode != 200) {
+        throw Exception(data["message"]);
       }
 
-      // ===============================
-      // LẦN 2: CHECK EMAIL VERIFIED
-      // ===============================
-      final verified =
-          await _authApi.checkEmailVerified(idToken: _idToken!);
+      final String customToken = data["customToken"];
 
-      if (!verified) {
-        success = false;
-        message = 'Email chưa được xác nhận. Vui lòng kiểm tra lại.';
-        return;
+      print("🔐 CUSTOM TOKEN = $customToken");
+
+      // 3️⃣ Firebase login
+      final userCred =
+          await FirebaseAuth.instance.signInWithCustomToken(customToken);
+
+      if (userCred.user == null) {
+        throw Exception("Firebase login failed");
       }
 
-      // ===============================
-      // CALL BACKEND AFTER VERIFY
-      // ===============================
-      await AuthApi.afterVerify(idToken: _idToken!);
+      print("✅ LOGIN UID = ${userCred.user!.uid}");
 
-      success = true;
-      message = 'Email xác nhận thành công. Đang chuyển trang...';
-       
-      // 👉 Điều hướng sang trang fill info
-      // (UI hoặc Router sẽ xử lý phần này)
+      // 4️⃣ Get ID token (CACHE)
+      idToken = await userCred.user!.getIdToken(true);
+
+      print("🔥 ID TOKEN = $idToken");
+
     } catch (e) {
-      
-      message = _friendlyError(e.toString());
-      canNavigate = true;
-    } catch (e) {
-      message = e.toString();
+
+      print("❌ SIGNUP ERROR = $e");
+      rethrow;
+
     } finally {
+
       loading = false;
       notifyListeners();
+
     }
   }
 
-  /// ===============================
-  /// XỬ LÝ ERROR CHO DỄ NHÌN
-  /// ===============================
-  String _friendlyError(String raw) {
-    if (raw.contains('EMAIL_EXISTS')) {
-      return 'Email đã tồn tại. Vui lòng đăng nhập.';
-    }
-    if (raw.contains('INVALID_PASSWORD')) {
-      return 'Mật khẩu không hợp lệ.';
-    }
-    return raw;
+  /* =========================
+      STEP 2: VERIFY + SAVE
+  ========================= */
+Future<void> verifyAndSave() async {
+
+  // 🔄 Luôn lấy lại token mới nhất
+  fcmToken ??= await FirebaseMessaging.instance.getToken();
+
+  if (fcmToken == null) {
+    throw Exception("Cannot get FCM Token");
   }
 
-  @override
-  void dispose() {
-    emailController.dispose();
-    passwordController.dispose();
-    super.dispose();
+  // 🔄 Lấy user hiện tại
+  final user = FirebaseAuth.instance.currentUser;
+
+  if (user == null) {
+    throw Exception("User not logged in");
   }
+
+  // 🔄 Lấy ID Token mới
+  final idToken = await user.getIdToken(true);
+
+  print("🟢 SEND FCM = $fcmToken");
+print("🟢 SEND IDTOKEN = ${idToken!.substring(0, 20)}...");
+
+  final res = await http.post(
+    Uri.parse("${ApiConfig.baseUrl}/auth/after-verify"),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: jsonEncode({
+      "idToken": idToken,
+      "fcmToken": fcmToken,
+    }),
+  );
+
+  print("📡 VERIFY STATUS = ${res.statusCode}");
+  print("📦 VERIFY BODY = ${res.body}");
+
+  if (res.statusCode != 200) {
+    throw Exception("Verify failed: ${res.body}");
+  }
+}
 }

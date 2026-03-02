@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
+import 'package:web_flutter/routes/app_routes.dart';
 import '../controllers/signin_controller.dart';
 import '../../../core/widgets/back_button_widget.dart';
 
@@ -12,30 +12,31 @@ class SigninPage extends StatefulWidget {
 }
 
 class _SigninPageState extends State<SigninPage> {
+
   bool _navigated = false;
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
+  Widget build(BuildContext context) {
 
     final controller = context.watch<SigninController>();
 
+    /// ✅ Navigate khi login thành công
     if (controller.canNavigate && !_navigated) {
+
       _navigated = true;
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.pushReplacementNamed(context, '/home');
+        Navigator.pushReplacementNamed(
+          context,
+          AppRoutes.dashboard,
+        );
       });
     }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final controller = context.watch<SigninController>();
 
     return Scaffold(
       body: Stack(
         children: [
+
           const AppBackButton(),
 
           Center(
@@ -46,6 +47,7 @@ class _SigninPageState extends State<SigninPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+
                   const Text(
                     'Welcome back!\nSignin to your account',
                     style: TextStyle(
@@ -87,7 +89,9 @@ class _SigninPageState extends State<SigninPage> {
                           ? const SizedBox(
                               width: 20,
                               height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
                             )
                           : const Text('Sign In'),
                     ),

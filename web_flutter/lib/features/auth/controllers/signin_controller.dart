@@ -1,19 +1,18 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../services/auth_api.dart';
 
 class SigninController extends ChangeNotifier {
-  final emailController = TextEditingController();
-  final passwordController = TextEditingController();
+  final AuthApi _authApi = AuthApi();
+
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
 
   bool loading = false;
   bool success = false;
   bool canNavigate = false;
   String message = '';
-
-  /// token backend trả về
-  String? idToken;
 
   Future<void> handleSignin() async {
     loading = true;
@@ -23,50 +22,79 @@ class SigninController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      /// 1️⃣ LẤY FCM TOKEN
-      final fcmToken = await FirebaseMessaging.instance.getToken();
+      print("STEP 1: Calling backend signIn API");
 
-      if (fcmToken == null) {
-        throw Exception('Cannot get FCM token');
+      /// 1️⃣ Gọi backend login
+      final data = await _authApi.signIn(
+        emailController.text.trim(),
+        passwordController.text.trim(),
+      ).timeout(const Duration(seconds: 10));
+
+      print("STEP 2: Backend login success");
+
+      final firebaseCustomToken = data['firebaseCustomToken'];
+
+      if (firebaseCustomToken == null) {
+        throw Exception("firebaseCustomToken is null");
       }
 
-      /// 2️⃣ CALL BACKEND SIGN IN
-      final response = await http.post(
-        Uri.parse('http://localhost:3000/auth/signin'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': emailController.text.trim(),
-          'password': passwordController.text,
-          'fcmToken': fcmToken,
-        }),
-      );
+      print("STEP 3: Login Firebase with custom token");
 
-      final data = jsonDecode(response.body);
+      /// 2️⃣ Login Firebase bằng custom token
+      await FirebaseAuth.instance.signInWithCustomToken(firebaseCustomToken);
 
-      if (response.statusCode == 200 &&
-          data['message'] == 'Sign in successful') {
-        success = true;
-        message = data['message'];
+      final firebaseUser = FirebaseAuth.instance.currentUser;
+      print("🔥 CHECK FIREBASE USER = ${firebaseUser?.uid}");
 
-        /// 3️⃣ LẤY ID TOKEN BACKEND SINH RA
-        idToken = data['data']?['idToken'];
-
-        canNavigate = true;
-      } else {
-        message = data['message'] ?? 'Sign in failed';
+      if (firebaseUser == null) {
+        throw Exception("Firebase login failed");
       }
+
+      /// 3️⃣ Lấy JWT token backend (nếu bạn lưu token)
+      final token = await _authApi.getToken();
+      if (token == null) {
+        throw Exception("Token not found after login");
+      }
+
+      print("STEP 4: Token length = ${token.length}");
+
+      // ================= FCM =================
+      try {
+        print("STEP 5: Requesting FCM permission");
+
+        await FirebaseMessaging.instance.requestPermission()
+            .timeout(const Duration(seconds: 5));
+
+        print("STEP 6: Getting FCM token");
+
+        final fcmToken = await FirebaseMessaging.instance.getToken(
+          vapidKey: "BPAQH-UaL1Jb2_1BsaaRDMTQrxQu3sMHXxFI0p7WR18P9JaexK7o2TSps9lGknCzPUjL-pVvjq165Y2gSpPgf1A",
+        ).timeout(const Duration(seconds: 5));
+
+        print("STEP 7: FCM token = $fcmToken");
+
+        if (fcmToken != null) {
+          print("STEP 8: Updating FCM to backend");
+
+          await _authApi.updateFcm(fcmToken, token)
+              .timeout(const Duration(seconds: 5));
+
+          print("STEP 9: updateFcm DONE");
+        }
+      } catch (fcmError) {
+        print("FCM ERROR CAUGHT: $fcmError");
+      }
+
+      message = "Signin successful";
+      success = true;
+      canNavigate = true;
     } catch (e) {
+      print("MAIN ERROR: $e");
       message = e.toString();
+      success = false;
     }
 
     loading = false;
     notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    emailController.dispose();
-    passwordController.dispose();
-    super.dispose();
   }
 }

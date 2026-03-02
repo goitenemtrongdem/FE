@@ -1,33 +1,50 @@
-import 'package:flutter/material.dart';
-import '../services/user_api.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../../config/api_config.dart';
 
-class FillInfoController extends ChangeNotifier {
-  final fullname = TextEditingController();
-  final address = TextEditingController();
-  final birthday = TextEditingController();
-  final citizen = TextEditingController();
+class FillInfoController {
 
-  bool loading = false;
-  String message = '';
+  Future<void> fillInfo({
+    required String fullname,
+    required String address,
+    required String birthday,
+    required String citizenNumber,
+    required String phoneNumber,
+  }) async {
 
-  Future<void> submit() async {
-    try {
-      loading = true;
-      notifyListeners();
+    final user = FirebaseAuth.instance.currentUser;
 
-      await UserApi.fillInfo({
-        'fullname': fullname.text,
-        'address': address.text,
-        'birthday': birthday.text,
-        'citizenNumber': citizen.text,
-      });
+    if (user == null) {
+      throw Exception("User not logged in");
+    }
 
-      message = 'Submitted successfully';
-    } catch (e) {
-      message = e.toString();
-    } finally {
-      loading = false;
-      notifyListeners();
+    final idToken = await user.getIdToken(true);
+
+    if (idToken == null) {
+      throw Exception("Cannot get idToken");
+    }
+
+    final response = await http.post(
+      Uri.parse("${ApiConfig.baseUrl}/user/update-profile"),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $idToken",  // ✅ QUAN TRỌNG
+      },
+body: jsonEncode({
+  "fullName": fullname,        // ✅ chữ N viết hoa
+  "address": address,
+  "dateOfBirth": birthday,     // ✅ đúng key backend
+  "citizenNumber": citizenNumber,
+  "phoneNumber": phoneNumber,  // ✅ đúng key backend
+}),
+    );
+
+    print("📡 FILL INFO STATUS = ${response.statusCode}");
+    print("📦 FILL INFO BODY = ${response.body}");
+
+    if (response.statusCode != 200) {
+      throw Exception(response.body);
     }
   }
 }

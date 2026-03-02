@@ -1,8 +1,125 @@
+// import 'package:flutter/material.dart';
+// import 'package:provider/provider.dart';
+
+// import '../controllers/signup_controller.dart';
+// import '../../../core/widgets/back_button_widget.dart';
+
+// class SignupPage extends StatefulWidget {
+//   const SignupPage({super.key});
+
+//   @override
+//   State<SignupPage> createState() => _SignupPageState();
+// }
+
+// class _SignupPageState extends State<SignupPage> {
+//   bool _navigated = false; // 🚫 chống navigate nhiều lần
+
+//   @override
+//   void didChangeDependencies() {
+//     super.didChangeDependencies();
+
+//     final controller = context.watch<SignupController>();
+
+//     // ✅ CHỈ CHUYỂN TRANG 1 LẦN DUY NHẤT
+//     if (controller.canNavigate && !_navigated) {
+//       _navigated = true;
+
+//       WidgetsBinding.instance.addPostFrameCallback((_) {
+//         Navigator.pushReplacementNamed(context, '/fill-info');
+//       });
+//     }
+//   }
+
+//   @override
+//   Widget build(BuildContext context) {
+//     final controller = context.watch<SignupController>();
+
+//     return Scaffold(
+//       body: Stack(
+//         children: [
+//           const AppBackButton(),
+
+//           Center(
+//             child: Container(
+//               width: 420,
+//               padding: const EdgeInsets.all(32),
+//               child: Column(
+//                 mainAxisSize: MainAxisSize.min,
+//                 crossAxisAlignment: CrossAxisAlignment.start,
+//                 children: [
+//                   const Text(
+//                     'Welcome back\nSign up to your account',
+//                     style: TextStyle(
+//                       fontSize: 28,
+//                       fontWeight: FontWeight.bold,
+//                     ),
+//                   ),
+
+//                   const SizedBox(height: 32),
+
+//                   TextField(
+//                     controller: controller.emailController,
+//                     decoration: const InputDecoration(
+//                       labelText: 'Email',
+//                     ),
+//                   ),
+
+//                   const SizedBox(height: 16),
+
+//                   TextField(
+//                     controller: controller.passwordController,
+//                     obscureText: true,
+//                     decoration: const InputDecoration(
+//                       labelText: 'Password',
+//                     ),
+//                   ),
+
+//                   const SizedBox(height: 24),
+
+//                   SizedBox(
+//                     width: double.infinity,
+//                     child: ElevatedButton(
+//                       onPressed: controller.loading
+//                           ? null
+//                           : () async {
+//                               await controller.handleSignup();
+//                             },
+//                       child: controller.loading
+//                           ? const SizedBox(
+//                               width: 20,
+//                               height: 20,
+//                               child: CircularProgressIndicator(strokeWidth: 2),
+//                             )
+//                           : const Text('Next'),
+//                     ),
+//                   ),
+
+//                   if (controller.message.isNotEmpty) ...[
+//                     const SizedBox(height: 16),
+//                     Text(
+//                       controller.message,
+//                       style: TextStyle(
+//                         color: controller.success
+//                             ? Colors.green
+//                             : Colors.red,
+//                       ),
+//                     ),
+//                   ],
+//                 ],
+//               ),
+//             ),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+// }
+
+
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../controllers/signup_controller.dart';
-import '../../../core/widgets/back_button_widget.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -12,104 +129,105 @@ class SignupPage extends StatefulWidget {
 }
 
 class _SignupPageState extends State<SignupPage> {
-  bool _navigated = false; // 🚫 chống navigate nhiều lần
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
+  final emailCtrl = TextEditingController();
+  final passCtrl = TextEditingController();
 
-    final controller = context.watch<SignupController>();
+  bool loading = false;
+  bool sent = false;
 
-    // ✅ CHỈ CHUYỂN TRANG 1 LẦN DUY NHẤT
-    if (controller.canNavigate && !_navigated) {
-      _navigated = true;
+  // STEP 1: Signup
+Future signup() async {
+  try {
 
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.pushReplacementNamed(context, '/fill-info');
-      });
-    }
+    final controller =
+        Provider.of<SignupController>(context, listen: false);
+
+    setState(() => loading = true);
+
+    await controller.signup(
+      email: emailCtrl.text.trim(),
+      password: passCtrl.text.trim(),
+    );
+
+    setState(() => sent = true);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Check email to verify")),
+    );
+
+  } catch (e) {
+    showError(e.toString());
+  }
+
+  setState(() => loading = false);
+}
+
+  // STEP 2: Next
+Future next() async {
+  try {
+
+    final controller =
+        Provider.of<SignupController>(context, listen: false);
+
+    setState(() => loading = true);
+
+    await controller.verifyAndSave();
+
+    Navigator.pushReplacementNamed(
+      context,
+      "/fill-info",
+    );
+
+  } catch (e) {
+    showError(e.toString());
+  }
+
+  setState(() => loading = false);
+}
+
+  void showError(String msg) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
   Widget build(BuildContext context) {
-    final controller = context.watch<SignupController>();
-
     return Scaffold(
-      body: Stack(
-        children: [
-          const AppBackButton(),
+      appBar: AppBar(title: const Text("Signup")),
 
-          Center(
-            child: Container(
-              width: 420,
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Welcome back\nSign up to your account',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
 
-                  const SizedBox(height: 32),
+        child: Column(
+          children: [
 
-                  TextField(
-                    controller: controller.emailController,
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  TextField(
-                    controller: controller.passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Password',
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: controller.loading
-                          ? null
-                          : () async {
-                              await controller.handleSignup();
-                            },
-                      child: controller.loading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Next'),
-                    ),
-                  ),
-
-                  if (controller.message.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    Text(
-                      controller.message,
-                      style: TextStyle(
-                        color: controller.success
-                            ? Colors.green
-                            : Colors.red,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+            TextField(
+              controller: emailCtrl,
+              decoration: const InputDecoration(labelText: "Email"),
             ),
-          ),
-        ],
+
+            TextField(
+              controller: passCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: "Password"),
+            ),
+
+            const SizedBox(height: 30),
+
+            if (!sent)
+              ElevatedButton(
+                onPressed: loading ? null : signup,
+                child: const Text("Signup"),
+              ),
+
+            if (sent)
+              ElevatedButton(
+                onPressed: loading ? null : next,
+                child: const Text("Next"),
+              ),
+          ],
+        ),
       ),
     );
   }

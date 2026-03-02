@@ -1,0 +1,68 @@
+{
+  "project_info": {
+    "project_number": "644959023893",
+    "firebase_url": "https://iot-chong-trom-xe-may-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "iot-chong-trom-xe-may",
+    "storage_bucket": "iot-chong-trom-xe-may.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:644959023893:android:77246d0d125adb6673ef1c",
+        "android_client_info": {
+          "package_name": "com.example.appflutter_iot"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-JEvyaWmNu-b2lPZ_tJg6WNCRzY3G9rc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:644959023893:android:55cdf1d7f5fb24cd73ef1c",
+        "android_client_info": {
+          "package_name": "com.example.gps_web"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-JEvyaWmNu-b2lPZ_tJg6WNCRzY3G9rc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:644959023893:android:b1e2cb8485bfd38873ef1c",
+        "android_client_info": {
+          "package_name": "com.example.web_flutter"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-JEvyaWmNu-b2lPZ_tJg6WNCRzY3G9rc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,3 +1,4 @@
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../controllers/device_controller.dart';
@@ -31,7 +32,15 @@ class _DashboardPageState extends State<DashboardPage> {
   bool showForm = false;
   bool isLoading = false;
   bool isFetching = false;
-  // bool showWelcomeToast = false;
+  Map<String, dynamic>? userProfile;
+bool isLoadingProfile = false;
+bool isEditingProfile = false;
+bool showUserMenu = false;
+final fullNameController = TextEditingController();
+final dobController = TextEditingController();
+final addressController = TextEditingController();
+final phoneController = TextEditingController();
+final citizenController = TextEditingController();
   String formatTime(Timestamp timestamp) {
   final date = timestamp.toDate();
   return DateFormat("hh:mm a yyyy-MM-dd").format(date);
@@ -63,6 +72,129 @@ void closeMap() async {
   setState(() {
     showMap = false;
   });
+}
+
+void showEditDeviceDialog(Map<String, dynamic> device) {
+  final brandCtrl = TextEditingController(text: device["brand"]);
+  final colorCtrl = TextEditingController(text: device["color"]);
+  final plateCtrl = TextEditingController(text: device["licensePlate"]);
+  final modelCtrl = TextEditingController(text: device["model"]);
+  final verifyCtrl = TextEditingController();
+
+  String? errorText;
+  bool isLoading = false;
+
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setStateDialog) {
+          return Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Container(
+              width: 420,
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    "Edit Device",
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 20),
+
+                  TextField(
+                    controller: brandCtrl,
+                    decoration: const InputDecoration(labelText: "Brand"),
+                  ),
+                  TextField(
+                    controller: modelCtrl,
+                    decoration: const InputDecoration(labelText: "Model"),
+                  ),
+                  TextField(
+                    controller: colorCtrl,
+                    decoration: const InputDecoration(labelText: "Color"),
+                  ),
+                  TextField(
+                    controller: plateCtrl,
+                    decoration: const InputDecoration(labelText: "License Plate"),
+                  ),
+
+                  TextField(
+                    controller: verifyCtrl,
+                    decoration: InputDecoration(
+                      labelText: "Verification Code",
+                      errorText: errorText,
+                    ),
+                    obscureText: true,
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: isLoading
+                            ? null
+                            : () => Navigator.pop(context),
+                        child: const Text("Cancel"),
+                      ),
+                      const SizedBox(width: 10),
+
+                      ElevatedButton(
+                        onPressed: isLoading
+                            ? null
+                            : () async {
+                                setStateDialog(() {
+                                  isLoading = true;
+                                  errorText = null;
+                                });
+
+                                final body = {
+                                  "id": device["id"],
+                                  "brand": brandCtrl.text,
+                                  "model": modelCtrl.text,
+                                  "color": colorCtrl.text,
+                                  "licensePlate": plateCtrl.text,
+                                  "verificationCode": verifyCtrl.text,
+                                };
+
+                                try {
+                                  await updateDevice(body); // 👈 API call
+
+                                  Navigator.pop(context); // success
+                                } catch (e) {
+                                  setStateDialog(() {
+                                    errorText = e.toString().replaceAll("Exception: ", "");
+                                  });
+                                }
+
+                                setStateDialog(() {
+                                  isLoading = false;
+                                });
+                              },
+                        child: isLoading
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Text("Save"),
+                      ),
+                    ],
+                  )
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
 }
 void showWelcomeBox() {
   final overlay = Overlay.of(context);
@@ -158,12 +290,115 @@ Future<void> fetchDevicesFromApi() async {
     });
   }
 }
+
+Future<void> updateUserProfile() async {
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    final idToken = await user?.getIdToken();
+
+    final response = await http.post(
+      Uri.parse("http://localhost:3000/api/user/update-profile"),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $idToken",
+      },
+      body: jsonEncode({
+        "userId": currentUserId,
+        "fullName": fullNameController.text,
+        "dateOfBirth": dobController.text,
+        "address": addressController.text,
+        "phoneNumber": phoneController.text,
+        "citizenNumber": citizenController.text,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      await fetchUserProfile(); // load lại data mới
+      setState(() {
+        isEditingProfile = false;
+      });
+    } else {
+      print("Update profile failed: ${response.body}");
+    }
+  } catch (e) {
+    print("updateUserProfile error: $e");
+  }
+}
+Future<void> updateDevice(Map<String, dynamic> device) async {
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    final idToken = await user?.getIdToken();
+
+    final response = await http.put(
+      Uri.parse("http://localhost:3000/api/device/update-device"),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $idToken",
+      },
+      body: jsonEncode({
+        "id": device["id"],
+        "brand": device["brand"],
+        "color": device["color"],
+        "licensePlate": device["licensePlate"],
+        "model": device["model"],
+        "verificationCode": device["verificationCode"],
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      await fetchDevicesFromApi();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Device updated successfully")),
+      );
+    } else {
+      print("Update failed: ${response.body}");
+    }
+  } catch (e) {
+    print("updateDevice error: $e");
+  }
+}
+Future<void> deleteDevice(String deviceId) async {
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    final idToken = await user?.getIdToken();
+
+    final response = await http.delete(
+      Uri.parse("http://localhost:3000/api/device/delete-device"),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $idToken",
+      },
+      body: jsonEncode({
+        "deviceID": deviceId,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      print("✅ Device deleted");
+
+      // reload list
+      await fetchDevicesFromApi();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Device deleted successfully")),
+      );
+    } else {
+      print("❌ Delete failed: ${response.body}");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Delete device failed")),
+      );
+    }
+  } catch (e) {
+    print("❌ deleteDevice error: $e");
+  }
+}
   @override
 void initState() {
   super.initState();
   // loadDevices();
   loadUserId();
-
+  fetchUserProfile(); 
   WidgetsBinding.instance.addPostFrameCallback((_) {
     showWelcomeToast(context); // 👈 gọi hàm riêng
   });
@@ -177,6 +412,71 @@ Future<void> loadUserId() async {
 
   if (userId != null) {
     await fetchDevicesFromApi(); // 👈 GỌI API TẠI ĐÂY
+  }
+}
+
+Future<void> markAllAsRead() async {
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    final idToken = await user?.getIdToken();
+
+    final response = await http.post(
+      Uri.parse("http://localhost:3000/api/notification/mark-all-as-read"),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $idToken",
+      },
+      body: jsonEncode({
+        "userId": currentUserId,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      print("All notifications marked as read");
+    } else {
+      print("Failed: ${response.body}");
+    }
+  } catch (e) {
+    print("Error markAllAsRead: $e");
+  }
+}
+
+Future<void> fetchUserProfile() async {
+  try {
+    setState(() => isLoadingProfile = true);
+
+    final user = FirebaseAuth.instance.currentUser;
+    final idToken = await user?.getIdToken();
+
+    if (currentUserId == null) {
+      print("currentUserId is null");
+      return;
+    }
+
+    final response = await http.post(
+      Uri.parse("http://localhost:3000/api/user/get-profile"),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $idToken",
+      },
+      body: jsonEncode({
+        "userId": currentUserId, // 👈 BẮT BUỘC
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final decoded = jsonDecode(response.body);
+
+      setState(() {
+        userProfile = decoded["data"];
+      });
+    } else {
+      print("Get profile failed: ${response.body}");
+    }
+  } catch (e) {
+    print("fetchUserProfile error: $e");
+  } finally {
+    setState(() => isLoadingProfile = false);
   }
 }
  @override
@@ -366,7 +666,15 @@ Stream<List<Map<String, dynamic>>> deviceStream(String userId) {
       });
 }
 
-
+Stream<int> unreadNotificationCountStream(String userId) {
+  return FirebaseFirestore.instance
+      .collection("user-notifications")
+      .doc(userId)
+      .collection("items")
+      .where("isRead", isEqualTo: false) // 👈 CHỈ LẤY CHƯA ĐỌC
+      .snapshots()
+      .map((snapshot) => snapshot.docs.length);
+}
  
   Widget buildTextField(String label, TextEditingController controller) {
     return Padding(
@@ -387,7 +695,6 @@ Stream<List<Map<String, dynamic>>> deviceStream(String userId) {
 
   // ================= DEVICE BOX (NEW UI) =================
  Widget buildDeviceBox(Map<String, dynamic> device) {
-
   bool antiThief = device["antiThief"] == true;
 
   return Container(
@@ -408,11 +715,73 @@ Stream<List<Map<String, dynamic>>> deviceStream(String userId) {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
 
+        // ===== HEADER ROW (ID + 3 DOT MENU) =====
         Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Icon(Icons.confirmation_number, size: 18),
-            const SizedBox(width: 6),
-            Expanded(child: Text(device["id"] ?? "")),
+            Row(
+              children: [
+                const Icon(Icons.confirmation_number, size: 18),
+                const SizedBox(width: 6),
+                Text(device["id"] ?? ""),
+              ],
+            ),
+
+            // 🔥 3 DOT MENU
+PopupMenuButton<String>(
+  icon: const Icon(Icons.more_vert),
+  onSelected: (value) async {
+    if (value == "edit") {
+      showEditDeviceDialog(device); // 👈 GỌI FORM EDIT
+    } 
+    else if (value == "delete") {
+
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("Confirm delete"),
+          content: Text("Delete device ${device["id"]}?"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("Delete"),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm == true) {
+        await deleteDevice(device["id"]);
+      }
+    }
+  },
+  itemBuilder: (context) => const [
+    PopupMenuItem(
+      value: "edit",
+      child: Row(
+        children: [
+          Icon(Icons.edit, size: 18),
+          SizedBox(width: 8),
+          Text("Edit"),
+        ],
+      ),
+    ),
+    PopupMenuItem(
+      value: "delete",
+      child: Row(
+        children: [
+          Icon(Icons.delete, size: 18, color: Colors.red),
+          SizedBox(width: 8),
+          Text("Delete"),
+        ],
+      ),
+    ),
+  ],
+),
           ],
         ),
 
@@ -504,35 +873,78 @@ Stream<List<Map<String, dynamic>>> deviceStream(String userId) {
               itemCount: menuItems.length,
               itemBuilder: (context, index) {
 return ListTile(
-  leading: Icon(
-    menuIcons[index],
-    color: selectedIndex == index
-        ? Colors.blue
-        : Colors.black54,
-  ),
+leading: index == 2
+    ? StreamBuilder<int>(
+        stream: currentUserId == null
+            ? const Stream.empty()
+            : unreadNotificationCountStream(currentUserId!), // 👈 stream mới
+        builder: (context, snapshot) {
+          int count = snapshot.data ?? 0;
+
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Icon(
+                menuIcons[index],
+                size: 26,
+                color: selectedIndex == index
+                    ? Colors.blue
+                    : Colors.black54,
+              ),
+
+              if (count > 0)
+                Positioned(
+                  right: -6,
+                  top: -6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    child: Text(
+                      "$count",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      )
+    : Icon(
+        menuIcons[index],
+        color: selectedIndex == index
+            ? Colors.blue
+            : Colors.black54,
+      ),
+
   title: Text(
-    menuItems[index],
+    menuItems[index],   // 👈 QUAN TRỌNG
     style: TextStyle(
-      color: selectedIndex == index
-          ? Colors.blue
-          : Colors.black87,
-      fontWeight: selectedIndex == index
-          ? FontWeight.bold
-          : FontWeight.normal,
+      color: selectedIndex == index ? Colors.blue : Colors.black,
+      fontWeight:
+          selectedIndex == index ? FontWeight.bold : FontWeight.normal,
     ),
   ),
-                  selected: selectedIndex == index,
-                  selectedTileColor: Colors.blue.shade100,
-                  onTap: () {
-                    setState(() {
-                      selectedIndex = index;
-                      showMap = false; // 🔥 reset map khi đổi menu
-                    });
-  //                   if (index == 2) {
-  //                     //  await loadNotifications(); // 🔥 gọi API tại đây
-  // }
-                  },
-                );
+
+  selected: selectedIndex == index,
+
+  onTap: () {
+    setState(() {
+      selectedIndex = index;
+    });
+  },
+);
               },
             ),
           ),
@@ -623,19 +1035,110 @@ isLoadingDevices
                         ],
                       ),
                     )
-                 : selectedIndex == 2
-    ? currentUserId == null
-        ? const Center(child: CircularProgressIndicator())
-        : buildNotificationsPage(currentUserId!)
-    : const Center(child: Text("Coming soon...")),
+: selectedIndex == 0
+    ? buildUserPage()   // 👈 USERS PAGE
+    : selectedIndex == 1
+        ? SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Vehicle",
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 30),
+                buildAddVehicleCard(),
+                const SizedBox(height: 20),
+                if (showForm) ...[
+                  Form(
+                    key: _formKey,
+                    child: Column(
+                      children: [
+                        buildTextField("Device ID", deviceIdController),
+                        buildTextField("Verification Code", verificationCodeController),
+                        buildTextField("Brand", brandController),
+                        buildTextField("Model", modelController),
+                        buildTextField("Color", colorController),
+                        buildTextField("License Plate", licensePlateController),
+                      ],
+                    ),
+                  )
+                ],
+                const SizedBox(height: 30),
+                 ...devices.map((device) => buildDeviceBox(device)).toList(),
+              ],
+            ),
+          )
+        : buildNotificationsPage(currentUserId!),
             ),
     ),
   ],
 ),
     );
   }
+
+IconData getNotificationIcon(String title) {
+  switch (title) {
+    case "ADD_DEVICE":
+      return Icons.add_circle; // ➕ thêm xe
+    case "UPDATE_DEVICE":
+      return Icons.edit; // ✏️ sửa xe
+    case "DELETE_DEVICE":
+      return Icons.delete; // 🗑 xóa xe
+    case "UPDATE_PROFILE":
+      return Icons.person; // 👤 cập nhật hồ sơ
+
+    case "ON_ANTI_THEFT":
+      return Icons.lock; // 🔒
+    case "OFF_ANTI_THEFT":
+      return Icons.lock_open; // 🔓
+
+    case "SOS":
+    case "LOST1":
+    case "LOST2":
+      return Icons.warning; // ⚠️
+
+    case "signin":
+      return Icons.login; // 🔑
+    case "signup":
+      return Icons.person_add; // 👥
+
+    default:
+      return Icons.notifications;
+  }
+}
+
+Color getNotificationColor(String title) {
+  switch (title) {
+    case "ADD_DEVICE":
+      return Colors.green; // thành công
+    case "UPDATE_DEVICE":
+      return Colors.blue; // chỉnh sửa
+    case "DELETE_DEVICE":
+      return Colors.red; // nguy hiểm
+    case "UPDATE_PROFILE":
+      return Colors.purple; // hồ sơ
+
+    case "ON_ANTI_THEFT":
+      return Colors.green;
+    case "OFF_ANTI_THEFT":
+      return Colors.orange;
+
+    case "SOS":
+    case "LOST1":
+    case "LOST2":
+      return Colors.redAccent;
+
+    case "signin":
+    case "signup":
+      return Colors.blue;
+
+    default:
+      return Colors.grey;
+  }
+}
 Widget buildNotificationsPage(String userId) {
-  print("🟡 buildNotificationsPage userId = $userId"); // 👈 thêm dòng này
+
   return StreamBuilder<List<NotificationModel>>(
     stream: notificationStream(userId),
     builder: (context, snapshot) {
@@ -649,63 +1152,336 @@ Widget buildNotificationsPage(String userId) {
 
       final notifications = snapshot.data!;
 
-      return ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: notifications.length,
-        itemBuilder: (context, index) {
-          final data = notifications[index];
+      return Column(
+        children: [
+          // 🔥 ICON CHECK GÓC PHẢI
+          // 🔔 NOTIFICATION ICON + BADGE
+Align(
+  alignment: Alignment.topRight,
+  child: Padding(
+    padding: const EdgeInsets.only(right: 16, top: 8),
+    child: InkWell(
+      onTap: () async {
+       await markAllAsRead();
+        // TODO: sau này mark all as read
+      },
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 4,
+            )
+          ],
+        ),
+        child: const Icon(
+          Icons.done,   // 👈 icon dấu ✓ giống hình bạn gửi
+          color: Colors.black,
+          size: 22,
+        ),
+      ),
+    ),
+  ),
+),
 
-          final String title = data.title;
-          final String content = data.content;
-          final int type = data.type;
-          final DateTime time = data.createdAt;
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: notifications.length,
+              itemBuilder: (context, index) {
+                final data = notifications[index];
 
-          final formattedTime =
-              DateFormat('hh:mm a dd-MM-yyyy').format(time);
+                final String title = data.title;
+                final String content = data.content;
+                final String deviceId = data.deviceId ?? "";
+                final DateTime time = data.createdAt;
 
-          Color titleColor;
-          IconData icon;
+                final formattedTime =
+                    DateFormat('hh:mm a dd-MM-yyyy').format(time);
 
-          if (type == 1) {
-            titleColor = Colors.red;
-            icon = Icons.warning;
-          } else if (type == 2) {
-            titleColor = Colors.green;
-            icon = Icons.lock_open;
-          } else {
-            titleColor = Colors.black;
-            icon = Icons.notifications;
-          }
+                final icon = getNotificationIcon(title);
+                final color = getNotificationColor(title);
 
-          return Card(
-            elevation: 2,
-            margin: const EdgeInsets.only(bottom: 12),
-            child: ListTile(
-              leading: Icon(icon, color: titleColor),
-              title: Text(
-                title,
-                style: TextStyle(
-                  color: titleColor,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 4),
-                  Text(content),
-                  const SizedBox(height: 6),
-                  Text(
-                    formattedTime,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                return Card(
+                  elevation: 2,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: ListTile(
+                    leading: Icon(icon, color: color, size: 30),
+                    title: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          title,
+                          style: TextStyle(
+                            color: color,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          formattedTime,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(content),
+                          const SizedBox(height: 4),
+                                if (title != "signin" && title != "signup")
+        // Text(
+        //   "Device: $deviceId",
+        //   style: const TextStyle(
+        //     fontSize: 12,
+        //     color: Color.fromARGB(255, 72, 64, 64),
+        //   ),
+        // ),
+                          if (deviceId.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade200,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                "Device ID: $deviceId",
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
-                ],
-              ),
+                );
+              },
             ),
-          );
-        },
+          ),
+        ],
       );
     },
+  );
+}
+Widget buildUserPage() {
+  if (isLoadingProfile) {
+    return const Center(child: CircularProgressIndicator());
+  }
+
+  if (userProfile == null) {
+    return const Center(child: Text("No user data"));
+  }
+
+  return Stack(
+    children: [
+      // ===== MAIN CONTENT =====
+      SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // HEADER + MENU ICON
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    "Owner",
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.menu, size: 28),
+                    onPressed: () {
+                      setState(() {
+                        showUserMenu = true;
+                      });
+                    },
+                  )
+                ],
+              ),
+
+              const SizedBox(height: 24),
+
+              // ===== VIEW MODE =====
+              if (!isEditingProfile) ...[
+                buildProfileRow(Icons.person, "Name", userProfile!["fullName"]),
+                const Divider(),
+
+                buildProfileRow(Icons.cake, "Dob", userProfile!["dateOfBirth"]),
+                const Divider(),
+
+                buildProfileRow(Icons.location_on, "Address", userProfile!["address"]),
+                const Divider(),
+
+                buildProfileRow(Icons.phone, "Phone number", userProfile!["phoneNumber"]),
+                const Divider(),
+
+                buildProfileRow(Icons.badge, "Citizen ID", userProfile!["citizenNumber"]),
+                const SizedBox(height: 30),
+
+                SizedBox(
+                  width: 200,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        isEditingProfile = true;
+
+                        // fill data vào controller
+                        fullNameController.text = userProfile!["fullName"] ?? "";
+                        dobController.text = userProfile!["dateOfBirth"] ?? "";
+                        addressController.text = userProfile!["address"] ?? "";
+                        phoneController.text = userProfile!["phoneNumber"] ?? "";
+                        citizenController.text = userProfile!["citizenNumber"] ?? "";
+                      });
+                    },
+                    child: const Text("Edit information"),
+                  ),
+                ),
+              ]
+
+              // ===== EDIT MODE =====
+              else ...[
+                TextField(
+                  controller: fullNameController,
+                  decoration: const InputDecoration(labelText: "Name"),
+                ),
+                TextField(
+                  controller: dobController,
+                  decoration: const InputDecoration(labelText: "Dob"),
+                ),
+                TextField(
+                  controller: addressController,
+                  decoration: const InputDecoration(labelText: "Address"),
+                ),
+                TextField(
+                  controller: phoneController,
+                  decoration: const InputDecoration(labelText: "Phone number"),
+                ),
+                TextField(
+                  controller: citizenController,
+                  decoration: const InputDecoration(labelText: "Citizen ID"),
+                ),
+
+                const SizedBox(height: 20),
+
+                Row(
+                  children: [
+                    ElevatedButton(
+                      onPressed: updateUserProfile,
+                      child: const Text("Save"),
+                    ),
+                    const SizedBox(width: 10),
+                    OutlinedButton(
+                      onPressed: () {
+                        setState(() {
+                          isEditingProfile = false;
+                        });
+                      },
+                      child: const Text("Cancel"),
+                    ),
+                  ],
+                )
+              ]
+            ],
+          ),
+        ),
+      ),
+
+      // ===== SLIDE MENU (RIGHT PANEL) =====
+      AnimatedPositioned(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        top: 0,
+        bottom: 0,
+        right: showUserMenu ? 0 : -260,
+        child: Container(
+          width: 260,
+  decoration: BoxDecoration(
+
+    color: const Color.fromARGB(255, 255, 255, 255),   // ✅ color nằm trong BoxDecoration
+    boxShadow: const [
+      BoxShadow(
+        color: Colors.black26,
+        blurRadius: 8,
+        offset: Offset(-2, 0),
+      ),
+    ],
+  ),
+          child: Column(
+            children: [
+              const SizedBox(height: 40),
+
+              ListTile(
+                leading: const Icon(Icons.settings),
+                title: const Text("Setting"),
+                onTap: () {},
+              ),
+              ListTile(
+                leading: const Icon(Icons.help),
+                title: const Text("Help"),
+                onTap: () {},
+              ),
+              ListTile(
+                leading: const Icon(Icons.link),
+                title: const Text("Link Device"),
+                onTap: () {},
+              ),
+              ListTile(
+                leading: const Icon(Icons.store),
+                title: const Text("Store"),
+                onTap: () {},
+              ),
+              ListTile(
+                leading: const Icon(Icons.logout),
+                title: const Text("Logout"),
+                onTap: () {},
+              ),
+
+              const Spacer(),
+
+              IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () {
+                  setState(() {
+                    showUserMenu = false;
+                  });
+                },
+              ),
+
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+      ),
+    ],
+  );
+}
+Widget buildProfileRow(IconData icon, String label, String value) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Row(
+      children: [
+        Icon(icon, size: 20, color: Colors.grey),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            "$label: $value",
+            style: const TextStyle(fontSize: 14),
+          ),
+        ),
+      ],
+    ),
   );
 }
   Widget buildAddVehicleCard() {

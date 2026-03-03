@@ -191,44 +191,91 @@ Future next() async {
         .showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Signup")),
-
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-
+@override
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: const Color(0xFFF8F1F7),
+    body: Center(
+      child: Container(
+        width: 420,
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 10,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+
+            const Text(
+              "Welcome back!\nSign up to your account",
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 32),
 
             TextField(
               controller: emailCtrl,
-              decoration: const InputDecoration(labelText: "Email"),
+              decoration: const InputDecoration(
+                labelText: "Email",
+                border: UnderlineInputBorder(),
+              ),
             ),
+
+            const SizedBox(height: 20),
 
             TextField(
               controller: passCtrl,
               obscureText: true,
-              decoration: const InputDecoration(labelText: "Password"),
+              decoration: const InputDecoration(
+                labelText: "Password",
+                border: UnderlineInputBorder(),
+              ),
             ),
 
-            const SizedBox(height: 30),
+            const SizedBox(height: 32),
 
-            if (!sent)
-              ElevatedButton(
-                onPressed: loading ? null : signup,
-                child: const Text("Signup"),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: loading
+                    ? null
+                    : (!sent ? signup : next),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFE6D9F2),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                ),
+                child: loading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(
+                        sent ? "Next" : "Sign Up",
+                        style: const TextStyle(fontSize: 16),
+                      ),
               ),
-
-            if (sent)
-              ElevatedButton(
-                onPressed: loading ? null : next,
-                child: const Text("Next"),
-              ),
+            ),
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
+
 }
